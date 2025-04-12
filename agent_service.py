@@ -134,7 +134,9 @@ tools = tools
 agent = create_react_agent(
     model=model,
     tools=tools,
-    prompt=prompt   
+    state_schema=TestAgentState,
+    prompt=prompt,
+    checkpointer=memory,#apparently this can only be used when not using `langgraph dev` command
 )
 # graph = agent.compile()
 
