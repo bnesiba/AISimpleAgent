@@ -1,28 +1,15 @@
 
 #!/usr/bin/env python3.9
-import json
 import logging
 import os
-from typing import Optional
 import fastapi
-from pydantic import BaseModel, Field
-from typing import Union
-from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Body
-
-import langchain_openai
-from langchain_openai import ChatOpenAI
-from langchain_core.documents import Document
-from langchain_core.retrievers import BaseRetriever
-from langchain_core.callbacks import CallbackManagerForRetrieverRun
-from langchain_core.tools import BaseTool
-from langchain_core.messages import HumanMessage, SystemMessage
-from typing import Literal
-from typing import List
-import uuid
+from langchain_core.messages import HumanMessage
 import asyncio
 import agent_service
+from models.agent_models import AgentMessage
+from signalr_service import SignalREvents, SignalRService
 # Log filtering config: Filter out access logs for /health and /openapi.json
 
 class ReadinessFilter(logging.Filter):
@@ -71,8 +58,8 @@ def getRootPath() -> str:
 
 # Create the app here
 app = fastapi.FastAPI(
-        title='CodeReaderApi', # API docs title
-        description='Api interface for Code reader chatbot', # API description
+        title='AgentApi', # API docs title
+        description='Api interface for agent chatbot', # API description
         version=getVersionNumber(),
         root_path=getRootPath(),
         docs_url='/swagger',
@@ -114,7 +101,7 @@ def api_ready():
 def read_root():
     return {"Hello": "World"}
 
-@app.post("/codeReader/Chat/{sessionId}")
+@app.post("/Chat/{sessionId}")
 def run_chat(sessionId, message: str = Body()):
     initialState = {
         "messages": [HumanMessage(content=message)],
@@ -124,16 +111,32 @@ def run_chat(sessionId, message: str = Body()):
     return result
 
 
-@app.post("/codeReader/StreamChat/{sessionId}")
-def run_chat(sessionId, message: str = Body()):
+@app.post("/StreamChat/{sessionId}")
+async def run_chat(sessionId, message: str = Body()):
     initialState = {
         "messages": [HumanMessage(content=message)],
+        "references": [],
     }
     config = {"configurable": {"thread_id": sessionId}}
     result = ""
+    SignalRService.send(sessionId, "START-OF-STREAM", msgType=SignalREvents.Message_Start.value)
+
     for msg, metadata in agent_service.agent.stream(initialState, config, stream_mode="messages"):
-        result += msg.content
-    return result
+        if(msg.content != "" and metadata["langgraph_node"] == "agent"):
+            SignalRService.send(sessionId, msg.content)
+            result += msg.content
+
+    SignalRService.send(sessionId, "END-OF-STREAM", msgType=SignalREvents.MESSAGE_COMPLETE.value) #might not be needed. could be used for references?
+    agentResponse = AgentMessage(message=result, sessionId=sessionId, chatReferences=agent_service.agent.get_state(config=config)[0].get("references"))
+    return agentResponse.to_dict()
+
+
+@app.get("/chat/{sessionId}")
+async def run_chat(sessionId):
+    config = {"configurable": {"thread_id": sessionId}}
+    stateObj = agent_service.agent.get_state(config=config)[0].get("messages")
+    
+    return stateObj
 
 # @app.post("/codeReader/Chat/{sessionId}")
 # def run_chat(sessionId, message: str = Body()):
