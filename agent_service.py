@@ -15,7 +15,7 @@ from langgraph.prebuilt import InjectedState
 from langchain_core.tools import tool
 from models.agent_models import AgentMessageReference, merge_ref_lists
 from settings_loader import SettingsLoader
-from tools.agent_tools import do_the_other_thing, do_the_thing
+from tools.agent_tools import get_file_structure, get_file_text
 
 
 
@@ -29,9 +29,9 @@ class InternalAgentState(TypedDict):
 
 
 base_instructions = f"""# Persona
-You are a helpful assistant named Helpy. <Your specific purpose goes here>
-Your job is to help the user (who is a person) with tasks or information. 
-These tasks might include things like: <example tasks go here>
+You are a helpful assistant named Helpy. You help the user understand how a particular codebase works.
+Your job is to help the user (who is a software engineer) with tasks or information. 
+These tasks might include things like: tracing logic through a codebase, or finding where a particular feature is implemented.
 
 
 # Tool Information
@@ -44,8 +44,8 @@ You are a virtual assistant. Use your tools and knowledge to provide consise **S
 - Be opinionated. Have and support the opinion that makes the most sense to you.
 - Take a forward-thinking view.
 - Adopt a skeptical, questioning approach.
-- View the user's opinions and ideas with skepticism too.
-- When giving feedback, be open an honest and not just a cheer leader.
+- View the user's opinions and ideas with skepticism.
+- When giving feedback, be open an honest and not just a cheerleader.
 - Do not just reflect the thoughts and opinions of the user, have your own.
 - Take your time and make sure you fully understand how to resolve the prompt before responding. 
 - Do as much of the work as you can for the user. Never tell the user to do something that you could do for them (unless asked). 
@@ -60,8 +60,7 @@ prompt = ChatPromptTemplate.from_messages([
 ])
 
 memory = MemorySaver()#apparently this can only be used when not using `langgraph dev` command
-# tools = ToolNode([get_weather, ask_the_human])
-tools = ToolNode([do_the_thing, do_the_other_thing])
+tools = ToolNode([get_file_text, get_file_structure])
 model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 tools = tools
 agent = create_react_agent(

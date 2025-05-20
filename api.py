@@ -117,7 +117,7 @@ async def run_chat(sessionId, message: str = Body()):
         "messages": [HumanMessage(content=message)],
         "references": [],
     }
-    config = {"configurable": {"thread_id": sessionId}}
+    config = {"configurable": {"thread_id": sessionId, "max_steps":100}} #TODO: verify max_steps is the right way to do this.
     result = ""
     SignalRService.send(sessionId, "START-OF-STREAM", msgType=SignalREvents.Message_Start.value)
 
