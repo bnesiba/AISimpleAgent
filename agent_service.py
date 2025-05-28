@@ -1,8 +1,8 @@
 import json
 from operator import add
 import os
+import sqlite3
 from typing import TypedDict, Annotated, Sequence
-# from agent_tools import ask_the_human, get_weather, get_file_summaries, get_folder_summaries, get_top_5_folder_summaries, get_dir_structure, get_dir_structure_summary, get_project_summary
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from langgraph.prebuilt import ToolNode
@@ -11,11 +11,10 @@ from langchain_core.messages import BaseMessage
 from langgraph.managed import IsLastStep, RemainingSteps
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.prompts import ChatPromptTemplate
-from langgraph.prebuilt import InjectedState
-from langchain_core.tools import tool
+from langgraph.checkpoint.sqlite import SqliteSaver
 from models.agent_models import AgentMessageReference, merge_ref_lists
 from settings_loader import SettingsLoader
-from tools.agent_tools import get_file_structure, get_file_text
+from tools.agent_tools import get_file_structure, get_file_text, update_file_text
 
 
 
@@ -29,13 +28,22 @@ class InternalAgentState(TypedDict):
 
 
 base_instructions = f"""# Persona
-You are a helpful assistant named Helpy. You help the user understand how a particular codebase works.
-Your job is to help the user (who is a software engineer) with tasks or information. 
-These tasks might include things like: tracing logic through a codebase, or finding where a particular feature is implemented.
+You are a helpful assistant named Helpy. You have tools that give you access to your code. You can use them to explore how your tools, prompts, and other functionality works, and can help the user navigate and modify it.
+Your job is to help the user with tasks or information. These tasks might include things like: explaining how you work, explaining how your tools are implemented or suggesting new changes.
+The UI supports markdown, so feel free to use markdown in your reponses when appropriate.
+
+**Answer the user's questions as fully as you can. If your tools could inform your answer USE THEM.**
 
 
 # Tool Information
-Information on complex tool interactions goes here. If there isn't any, assume the tools are simple and only do what they say they do.
+your code-related tools are pointed at the codebase that is running you as an agent. This means you can explore and modify your own code, prompts, and tools. You can also use these tools to help the user understand how you work.
+
+- `get_file_structure`: Get the structure of the files and directories in your codebase. This will help you find files to read or modify.
+- `get_file_text`: Get the text of a specified file in your codebase. Use `get_file_structure` to get file paths before using this tool.
+- `update_file_text`: Update the text of a specified file in your codebase. Use `get_file_text` to get the current text before providing your updated text. this is how you make changes to your code, prompts, or tools. **YOU MUST PROVIDE THE FULL TEXT OF THE FILE, THE FILE IS OVERWRITTEN WITH YOUR INPUT.**
+
+for any questions about how you work, or how your code is implemented, or whatver, make sure to use these tools before telling the user you don't have access or know the answer. 
+FOR ANY CODE CHANGES, OR SUGGESTIONS, ALWAYS LOOK AT EXISTING CODE AND FOLLOW THE PATTERNS IN THE CODE. DO NOT JUST MAKE UP NEW CODE OR SUGGESTIONS WITHOUT LOOKING AT THE EXISTING CODE.
 
 # Rules
 You are a virtual assistant. Use your tools and knowledge to provide consise **SHORT** accurate answers to user prompts.
@@ -59,10 +67,16 @@ prompt = ChatPromptTemplate.from_messages([
     ("placeholder", "{messages}")
 ])
 
-memory = MemorySaver()#apparently this can only be used when not using `langgraph dev` command
-tools = ToolNode([get_file_text, get_file_structure])
-model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+# memory = MemorySaver() #in-memory checkpointer. history is lost on restart
+
+conn = sqlite3.connect("C:\\Users\\brandon.nesiba\\source\\repos\\sqlite-storage\\my_agent_state.db", check_same_thread=False) #setup connection to sqlite db
+memory = SqliteSaver(conn) #SqlLite checkpointer. This will persist state across restarts.
+tools = ToolNode([get_file_text, get_file_structure, update_file_text])
+model = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
 tools = tools
+
+
 agent = create_react_agent(
     model=model,
     tools=tools,

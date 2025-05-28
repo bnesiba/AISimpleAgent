@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage
 import asyncio
 import agent_service
 from models.agent_models import AgentMessage
+from langgraph.types import Command
 from signalr_service import SignalREvents, SignalRService
 # Log filtering config: Filter out access logs for /health and /openapi.json
 
@@ -70,7 +71,7 @@ app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True
 # Task to clean up idle sessions
 async def cleanup_sessions():
     while True:
-        print("Cleaning up idle sessions...")
+        print("(not really) Cleaning up idle sessions...")
         await asyncio.sleep(1800)
 
 @app.on_event("startup")
@@ -113,21 +114,38 @@ def run_chat(sessionId, message: str = Body()):
 
 @app.post("/StreamChat/{sessionId}")
 async def run_chat(sessionId, message: str = Body()):
+
+    config = {"configurable": {"thread_id": sessionId}, "recursion_limit":50}
+    result = ""
     initialState = {
         "messages": [HumanMessage(content=message)],
         "references": [],
     }
-    config = {"configurable": {"thread_id": sessionId, "max_steps":100}} #TODO: verify max_steps is the right way to do this.
-    result = ""
-    SignalRService.send(sessionId, "START-OF-STREAM", msgType=SignalREvents.Message_Start.value)
+
+    agentInterrupts = agent_service.agent.get_state(config=config).interrupts
+    if agentInterrupts and len(agentInterrupts) > 0:
+        print("Agent has interrupt, handling")
+        initialState = Command(resume=message)
+
+    streamingConnected = SignalRService.send(sessionId, "START-OF-STREAM", msgType=SignalREvents.Message_Start.value)
 
     for msg, metadata in agent_service.agent.stream(initialState, config, stream_mode="messages"):
+        
         if(msg.content != "" and metadata["langgraph_node"] == "agent"):
-            SignalRService.send(sessionId, msg.content)
+            if(streamingConnected): #to save time, only stream if the START-OF-STREAM was sent successfully, otherwise assume signalr is down. 
+                SignalRService.send(sessionId, msg.content)
+
             result += msg.content
 
     SignalRService.send(sessionId, "END-OF-STREAM", msgType=SignalREvents.MESSAGE_COMPLETE.value) #might not be needed. could be used for references?
-    agentResponse = AgentMessage(message=result, sessionId=sessionId, chatReferences=agent_service.agent.get_state(config=config)[0].get("references"))
+
+    agentInterrupts = agent_service.agent.get_state(config=config).interrupts
+    responseMetadata = []
+    for interrupt in agentInterrupts:
+        print(interrupt.value)
+        responseMetadata.append(interrupt.value)
+
+    agentResponse = AgentMessage(message=result, sessionId=sessionId, chatReferences=agent_service.agent.get_state(config=config)[0].get("references"), metadata=responseMetadata)
     return agentResponse.to_dict()
 
 

@@ -40,4 +40,4 @@ class SignalRService:
             return result.status_code == 200
         except requests.exceptions.RequestException as e:
             print(f"Error sending message to SignalR server: {e}")
-            return True
+            return False

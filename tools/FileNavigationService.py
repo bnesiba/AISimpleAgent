@@ -1,6 +1,4 @@
-import json
 import os
-import uuid
 
 class FileNavService:
 
@@ -8,7 +6,7 @@ class FileNavService:
         self.startPath = projectPath
 
     def __init__(self):
-        self.startPath = "C:/Users/brandon.nesiba/source/repos/CodeActAgent/"
+        self.startPath = "C:/Users/brandon.nesiba/source/repos/AIStreamingAgent/"
 
 
     def generate_dir_structure(self):
@@ -38,6 +36,15 @@ class FileNavService:
         
     def get_full_path(self, subPath):
         return os.path.join(self.startPath, subPath)
+    
+    def update_file_text(self, subPath, newText):
+        filePath = os.path.join(self.startPath, subPath)
+        print(f"Updating file text for: {filePath}")
+        if not os.path.exists(filePath):
+            print(f"File does not exist: {filePath}")
+            return None
+        with open(filePath, 'w', encoding='utf-8') as file:
+            file.write(newText)
 
     @staticmethod
     def load_data_from_file(file):

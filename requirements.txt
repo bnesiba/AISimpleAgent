@@ -6,4 +6,6 @@ langchain-openai
 langgraph
 langgraph-cli
 langgraph-sdk
+langgraph-checkpoint-sqlite
 langgraph.prebuilt
+fastapi[standard]
