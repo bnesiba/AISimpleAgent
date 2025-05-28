@@ -7,10 +7,10 @@ from langgraph.types import Command
 from langgraph.types import interrupt
 from langchain_core.tools.base import InjectedToolCallId
 
-
 @tool
 def get_file_text(filePath: str, tool_call_id: Annotated[str, InjectedToolCallId]) -> str:
-    """Get the text of a specified file in your codebase. Use get_file_structure to get file paths."""
+    """Get the text of a specified file in your codebase. Use get_file_structure to get file paths.
+    DO NOT RUN THIS TOOL WITHOUT GETTING THE FILE PATH FROM get_file_structure FIRST."""
     print("getting file text...")
     fileNav = FileNavService()
     file_text = fileNav.get_file_text(filePath)
