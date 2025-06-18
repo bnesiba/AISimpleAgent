@@ -130,7 +130,6 @@ async def run_chat(sessionId, message: str = Body()):
     streamingConnected = SignalRService.send(sessionId, "START-OF-STREAM", msgType=SignalREvents.Message_Start.value)
 
     for msg, metadata in agent_service.agent.stream(initialState, config, stream_mode="messages"):
-        
         if(msg.content != "" and metadata["langgraph_node"] == "agent"):
             if(streamingConnected): #to save time, only stream if the START-OF-STREAM was sent successfully, otherwise assume signalr is down. 
                 SignalRService.send(sessionId, msg.content)

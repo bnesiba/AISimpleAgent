@@ -46,7 +46,7 @@ def update_file_text(filePath: str, newText: str, tool_call_id: Annotated[str, I
     print(f"Human response: {human_response}")
     if human_response.lower() != "yes":
         print("Update cancelled by user.")
-        return "Update cancelled by user."
+        return "Update was aborted by the user."
     
     fileNav = FileNavService()
     fileNav.update_file_text(filePath, newText)
