@@ -117,6 +117,7 @@ async def run_chat(sessionId, message: str = Body()):
 
     config = {"configurable": {"thread_id": sessionId}, "recursion_limit":50}
     result = ""
+    resultArray = []
     initialState = {
         "messages": [HumanMessage(content=message)],
         "references": [],
@@ -128,12 +129,16 @@ async def run_chat(sessionId, message: str = Body()):
         initialState = Command(resume=message)
 
     streamingConnected = SignalRService.send(sessionId, "START-OF-STREAM", msgType=SignalREvents.Message_Start.value)
-
+    currentMessageId = None
     for msg, metadata in agent_service.agent.stream(initialState, config, stream_mode="messages"):
         if(msg.content != "" and metadata["langgraph_node"] == "agent"):
+            if currentMessageId is None or currentMessageId != msg.id:
+                currentMessageId = msg.id
+                resultArray.append({"message_id": msg.id, "content": ""})
             if(streamingConnected): #to save time, only stream if the START-OF-STREAM was sent successfully, otherwise assume signalr is down. 
                 SignalRService.send(sessionId, msg.content)
-
+            print(f"Streaming message: {msg}")
+            resultArray[-1]["content"] += msg.content
             result += msg.content
 
     SignalRService.send(sessionId, "END-OF-STREAM", msgType=SignalREvents.MESSAGE_COMPLETE.value) #might not be needed. could be used for references?
